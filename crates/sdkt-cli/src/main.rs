@@ -1467,9 +1467,9 @@ fn parse_typed_args(args: &[String], strict: bool) -> Result<Vec<String>, String
 ///
 /// This is the write-direction counterpart to `sdkt decode`. Supported types
 /// are the primitives this CLI already encodes elsewhere (`parse_typed_args`):
-/// `u32`, `i32`, `u64`, `i64`, `bool`, `address`, `string`, `symbol`. Exactly one value
-/// is encoded per invocation; passing more than one is rejected to keep the
-/// output unambiguous.
+/// `u32`, `i32`, `u64`, `i64`, `u128`, `i128`, `bool`, `address`, `string`,
+/// `symbol`, `bytes`. Exactly one value is encoded per invocation; passing more
+/// than one is rejected to keep the output unambiguous.
 fn run_encode(values: &[String]) -> Result<String, String> {
     if values.is_empty() {
         return Err("no input provided: pass a value like u32:100".to_string());
@@ -1509,6 +1509,29 @@ fn run_encode(values: &[String]) -> Result<String, String> {
             .map_err(|_| format!("invalid i64 value: {raw}"))?
             .into_scval()
             .map_err(|e| e.to_string())?,
+        "u128" => raw
+            .parse::<u128>()
+            .map_err(|_| format!("invalid u128 value: {raw}"))?
+            .into_scval()
+            .map_err(|e| e.to_string())?,
+        "i128" => raw
+            .parse::<i128>()
+            .map_err(|_| format!("invalid i128 value: {raw}"))?
+            .into_scval()
+            .map_err(|e| e.to_string())?,
+        "bytes" => {
+            let mut b = Vec::new();
+            let s = raw.trim();
+            if s.len() % 2 != 0 {
+                return Err(format!("invalid hex byte in: {raw}"));
+            }
+            for i in (0..s.len()).step_by(2) {
+                let byte = u8::from_str_radix(&s[i..i + 2], 16)
+                    .map_err(|_| format!("invalid hex byte in: {raw}"))?;
+                b.push(byte);
+            }
+            b.into_scval().map_err(|e| e.to_string())?
+        }
         "bool" => raw
             .parse::<bool>()
             .map_err(|_| format!("invalid bool value: {raw}"))?
@@ -1530,12 +1553,39 @@ fn run_encode(values: &[String]) -> Result<String, String> {
             .map_err(|e| e.to_string())?,
         other => {
             return Err(format!(
-                "unknown type '{other}'. Use u32|i32|u64|i64|bool|string|symbol|address"
+                "unknown type '{other}'. Use u32|i32|u64|i64|u128|i128|bool|string|symbol|bytes|address"
             ))
         }
     };
 
     scval_to_base64(&scval).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod encode_tests {
+    use super::*;
+
+    #[test]
+    fn encode_matches_parse_typed_args_for_wide_and_bytes() {
+        for input in [
+            "u128:340282366920938463463374607431768211455",
+            "u128:1",
+            "i128:-1000",
+            "i128:42",
+            "bytes:0a0b",
+            "bytes:deadbeef",
+        ] {
+            let encoded = run_encode(&[input.to_string()]).unwrap();
+            let via_typed = parse_typed_args(&[input.to_string()], true).unwrap();
+            assert_eq!(encoded, via_typed[0], "mismatch for {input}");
+        }
+    }
+
+    #[test]
+    fn encode_rejects_odd_length_hex() {
+        let err = run_encode(&["bytes:0a0".to_string()]).unwrap_err();
+        assert_eq!(err, "invalid hex byte in: 0a0");
+    }
 }
 
 fn load_config() -> DevKitConfig {

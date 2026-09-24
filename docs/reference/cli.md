@@ -336,21 +336,28 @@ sdkt encode string:hello | xargs sdkt decode --type ScVal
 
 sdkt encode symbol:USD | xargs sdkt decode --type ScVal
 # {"symbol": "USD"}
+
+sdkt encode i128:-1000 | xargs sdkt decode --type ScVal
+# {"i128": "-1000"}
+
+sdkt encode bytes:0a0b | xargs sdkt decode --type ScVal
+# {"bytes": "0a0b"}
 ```
 
 ### Supported types (core subset)
 
-`u32`, `i32`, `u64`, `i64`, `bool`, `string`, `symbol` (up to 32 bytes),
-`address` (Stellar `G...` strkey).
+`u32`, `i32`, `u64`, `i64`, `u128`, `i128`, `bool`, `string`, `symbol` (up to
+32 bytes), `address` (Stellar `G...` strkey), `bytes` (hex string, e.g.
+`bytes:0a0b`).
 
 Exactly one value is encoded per invocation; the `TYPE:VALUE` syntax matches
 the typed-argument convention used by `sdkt call` and `sdkt invoke`.
 
 ### Unsupported (clear failure)
 
-Other types — `u128`, `i128`, `bytes`, `Vec`, `Map`, `Option`, `Result`,
-UDTs — are rejected with an error listing the supported types. Malformed
-values (bad numbers, invalid bools, invalid strkeys) fail with a message
+Compound types — `Vec`, `Map`, `Option`, `Result`, UDTs — are rejected with an
+error listing the supported types. Malformed values (bad numbers, invalid
+bools, invalid strkeys, odd-length or non-hex byte strings) fail with a message
 naming the offending value.
 
 ## Generate client
